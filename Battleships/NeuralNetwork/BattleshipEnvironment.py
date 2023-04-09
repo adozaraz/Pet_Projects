@@ -22,6 +22,8 @@ BOARD_SIZE = 10
 
 MAX_STEPS_PER_EPISODE = BOARD_SIZE**2
 
+SHIPS_COUNT = 20
+
 # Награды
 HIT_REWARD = 1
 MISS_REWARD = 0
@@ -144,14 +146,18 @@ class BattleshipEnvironment(py_environment.PyEnvironment):
                  discount = 0.9,
                  maxSteps = MAX_STEPS_PER_EPISODE):
         super().__init__()
-        self._strike_count = None
+        # HIT COUNTS
+        self._strike_count = None # Количество выстрелов
+        self._hit_count = None # Количество попаданий
+        # BOARDS
         self._hidden_board = None
         self._visible_board = None
-        self._battleships_count = None
-        self._hit_count = None
         self._boardSize = boardSize
+        # INFORMATION ABOUT SIMULATION
+        self._battleships_count = None
         self._discount = discount
         self._maxSteps = maxSteps
+        # NN SPECIFIC DATA
         self._observation_spec = array_spec.BoundedArraySpec(
             (self._boardSize, self._boardSize),
             np.float32,
@@ -161,6 +167,7 @@ class BattleshipEnvironment(py_environment.PyEnvironment):
         self._action_spec = array_spec.BoundedArraySpec((), np.int32, minimum=0, maximum=self._boardSize**2-1)
         self._current_time_step = ts.time_step_spec(self._observation_spec)
         self._episode_ended = False
+
         self.setUpBoards()
 
     def print_board(self):
@@ -184,7 +191,44 @@ class BattleshipEnvironment(py_environment.PyEnvironment):
         return self._current_time_step
 
     def _step(self, action: types.NestedArray) -> ts.TimeStep:
-        pass
+        if self._hit_count == SHIPS_COUNT:
+            self._episode_ended = True
+            return self.reset()
+
+        if self._strike_count == MAX_STEPS_PER_EPISODE:
+            self.reset()
+            return ts.termination(np.array(self._visible_board, dtype=np.float32),
+                                  UNFINISHED_GAME_REWARD)
+
+        self._strike_count += 1
+        action_x = action // self._boardSize
+        action_y = action % self._boardSize
+        # Hit
+        if self._hidden_board[action_x, action_y] == HIDDEN_OCCUPIED:
+            # Unrepeated move
+            if self._visible_board[action_x, action_y] == VISIBLE_BOARD_CELL_UNTRIED:
+                self._hit_count += 1
+                # Successful hit
+                self._visible_board[action_x, action_y] = VISIBLE_BOARD_CELL_HIT
+                if self._hit_count == SHIPS_COUNT:
+                    self._episode_ended = True
+                    return ts.termination(np.array(self._visible_board, dtype=np.float32),
+                                          FINISHED_GAME_REWARD)
+                else:
+                    self._episode_ended = False
+                    return ts.transition(np.array(self._visible_board, dtype=np.float32),
+                                         HIT_REWARD, self._discount)
+            # Repeated move
+            else:
+                self._episode_ended = False
+                return ts.transition(np.array(self._visible_board, dtype=np.float32),
+                                     REPEAT_STRIKE_REWARD, self._discount)
+        # Miss
+        else:
+            self._episode_ended = False
+            self._visible_board[action_x, action_y] = VISIBLE_BOARD_CELL_MISS
+            return ts.transition(np.array(self._visible_board, dtype=np.float32),
+                                 MISS_REWARD, self._discount)
 
     def _reset(self) -> ts.TimeStep:
         self._episode_ended = False
