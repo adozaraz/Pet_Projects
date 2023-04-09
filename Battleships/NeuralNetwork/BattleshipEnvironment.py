@@ -37,9 +37,105 @@ VISIBLE_BOARD_CELL_HIT = 1
 VISIBLE_BOARD_CELL_MISS = -1
 VISIBLE_BOARD_CELL_UNTRIED = 0
 
+#Direction Generation
+UP = 0
+RIGHT = 1
+DOWN = 2
+LEFT = 3
+
 
 def generateRandomBattleshipBoard(size):
-    pass
+    board = np.zeros(size)
+    i = 0
+    # size 4 ship
+    while i < 1:
+        if randomizeShipPlace(board, 4):
+            i += 1
+    i = 0
+    # Size 3 ship
+    while i < 2:
+        if randomizeShipPlace(board, 3):
+            i += 1
+
+    i = 0
+    # Size 2 ship
+    while i < 3:
+        if randomizeShipPlace(board, 2):
+            i += 1
+
+    i = 0
+    # Size 1 ship
+    while i < 4:
+        if randomizeShipPlace(board, 1):
+            i += 1
+
+    return board
+
+
+def checkIfNeighbours(board, coord):
+    upperLeftX = coord[0] - 1
+    upperLeftY = coord[1] - 1
+    lowerRightX = coord[0] + 2
+    lowerRightY = coord[1] + 2
+    if np.count_nonzero(board[upperLeftX:lowerRightX, upperLeftY:lowerRightY]) != 0:
+        return True
+    return False
+
+
+def randomizeShipPlace(board, shipSize):
+    cell = np.random.randint(0, 10, size=2)
+    if board[cell[0], cell[1]] == HIDDEN_UNOCCUPIED:
+        direction = np.random.randint(0, 4)
+        if checkIfPlacementIsPossible(board, cell, shipSize, direction):
+            setShip(board, cell, direction, shipSize)
+            return True
+    return False
+
+
+def checkIfPlacementIsPossible(board, coords, shipSize, direction):
+    if direction == UP:
+        if coords[1] + shipSize > BOARD_SIZE:
+            return False
+        for y in range(coords[1], coords[1] + shipSize):
+            if board[coords[0], y] != HIDDEN_UNOCCUPIED or checkIfNeighbours(board, (coords[0], y)):
+                return False
+        return True
+    elif direction == RIGHT:
+        if coords[0] + shipSize > BOARD_SIZE:
+            return False
+        for x in range(coords[0], coords[0] + shipSize):
+            if board[x, coords[1]] != HIDDEN_UNOCCUPIED or checkIfNeighbours(board, (x, coords[1])):
+                return False
+        return True
+    elif direction == DOWN:
+        if coords[1] - shipSize > BOARD_SIZE:
+            return False
+        for y in range(coords[1], coords[1] - shipSize, -1):
+            if board[coords[0], y] != HIDDEN_UNOCCUPIED or checkIfNeighbours(board, (coords[0], y)):
+                return False
+        return True
+    elif direction == LEFT:
+        if coords[0] - shipSize > BOARD_SIZE:
+            return False
+        for x in range(coords[0], coords[0] - shipSize, -1):
+            if board[x, coords[1]] != HIDDEN_UNOCCUPIED or checkIfNeighbours(board, (x, coords[1])):
+                return False
+        return True
+
+
+def setShip(board, startingCoord, direction, size):
+    if direction == UP:
+        for y in range(startingCoord[1], startingCoord[1]+size):
+            board[startingCoord[0], y] = HIDDEN_OCCUPIED
+    elif direction == RIGHT:
+        for x in range(startingCoord[0], startingCoord[0] + size):
+            board[x, startingCoord[1]] = HIDDEN_OCCUPIED
+    elif direction == DOWN:
+        for y in range(startingCoord[1], startingCoord[1] - size, -1):
+            board[startingCoord[0], y] = HIDDEN_OCCUPIED
+    elif direction == LEFT:
+        for x in range(startingCoord[0], startingCoord[0] - size, -1):
+            board[x, startingCoord[1]] = HIDDEN_OCCUPIED
 
 
 class BattleshipEnvironment(py_environment.PyEnvironment):
@@ -66,6 +162,10 @@ class BattleshipEnvironment(py_environment.PyEnvironment):
         self._current_time_step = ts.time_step_spec(self._observation_spec)
         self._episode_ended = False
         self.setUpBoards()
+
+    def print_board(self):
+        for i in self._hidden_board:
+            print(''.join(['.' if t == HIDDEN_UNOCCUPIED else 'X' for t in i]))
 
     def setUpBoards(self):
         self._strike_count = 0
